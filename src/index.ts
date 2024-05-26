@@ -30,7 +30,8 @@ export const dbParamVals = {
     postgresql: ':v',
 };
 
-const filter = "Address/City eq 'Redmond' and Address/City ne 'London' or ((Price mul 8 gt 20 or Price add 5 ge 10 or City in ('Redmond', 'London') and (Price sub 5) gt 10";
+const filter =
+    "Address/City eq 'Redmond' and Address/City ne 'London' or ((Price mul 8 gt 20 or Price add 5 ge 10)) or City in ('Redmond', 'London') and (Price sub 5) gt 10 and contains(CompanyName,'freds') and contains(Price,30) or endswith(CompanyName,'Futterkiste') and startswith(CompanyName, 40 )";
 export const createFilter = (source: string) => {
     const tokens: IParsedFilterRes = parseFilter(source);
     if (tokens.error) {
@@ -40,9 +41,8 @@ export const createFilter = (source: string) => {
     }
 
     const odataSqlPg = new ODataSqlConnector({ dbType: DbTypes.PostgreSql });
+    console.log(tokens.token);
     console.log(odataSqlPg.filterConnector(tokens.token));
-    
 };
-
 
 createFilter(filter);

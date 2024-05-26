@@ -7,5 +7,7 @@ export const constants: Record<string, string> = {
     ArithOperatorExp: 'ArithOperatorExp',
     groupOperatorExp: 'groupOperatorExp',
     closeBracExp: 'closeBracExp',
-    SINGLE_QUOTE: `'`
+    queryFuncExp: 'queryFuncExp',
+    notExp: 'notExp',
+    SINGLE_QUOTE: `'`,
 };

@@ -119,6 +119,13 @@ export class ODataSqlConnector {
                 } else {
                     throw new Error(`Was expecting ${this.nextExecptedExp} and got ${token.tokenType} | prevToken: ${prevToken}, prevSubToken: ${prevSubToken}, value: ${token.value}`);
                 }
+            } else if (token.tokenType === constants.queryFuncExp) {
+                if (this.checkDependency(token.tokenType, prevToken, prevSubToken)) {
+                    this.handleFunction(token, prevToken, prevSubToken);
+                    this.nextExecptedExp = expDependency[token.tokenType].after;
+                } else {
+                    throw new Error(`Was expecting ${this.nextExecptedExp} and got ${token.tokenType} | prevToken: ${prevToken}, prevSubToken: ${prevSubToken}, value: ${token.value}`);
+                }
             }
             prevToken = token.tokenType;
             prevSubToken = token.subType;
@@ -150,34 +157,58 @@ export class ODataSqlConnector {
         this.connectorRes.parameters?.set(bindVarName, value);
     }
 
-    private handleFunction(token: IOdataFilterToken) {
+    private handleFunction(token: IOdataFilterToken, prevToken: string, prevSubToken: string = '') {
         const funcName = token.value;
         const funcType = token.subType;
         const funcArgs = token.funcArgs!;
         switch (funcType) {
             case 'containsFuncExp':
+            case 'endswithFuncExp':
+            case 'startswithFuncExp':
+                let bindVarName = '';
+                let whereSubStr = '';
                 // In case of contains, make it a 'LIKE'
-                let [col, value, ...restArgs] = funcArgs.split(',');
+                let [col, value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
                 col = col.trim();
                 value = value.trim();
                 if (!col || !value || col.length === 0 || value.length === 0 || restArgs.length > 0) {
                     // guard clause
                     throw new Error(`contains function needs only two arguements one column name and one search string, received: ${funcArgs}`);
                 }
+                // Generate value
                 if (value[0] === constants.SINGLE_QUOTE && value[value.length - 1] !== constants.SINGLE_QUOTE) {
                     throw new Error(`${value} is not in valid string format, missing single quote at the end`);
                 } else if (value[0] !== constants.SINGLE_QUOTE && value[value.length - 1] === constants.SINGLE_QUOTE) {
                     throw new Error(`${value} is not in valid string format, missing single quote at the start`);
                 } else if (value[0] === constants.SINGLE_QUOTE && value[value.length - 1] === constants.SINGLE_QUOTE) {
-                    this.appendToWhere(`${col} LIKE`);
-                    
-                    return `${col} LIKE '%${removeStartEndChar(value)}%'`;
+                    if (funcType === 'endswithFuncExp') {
+                        bindVarName = `'%${removeStartEndChar(value)}'`;
+                    } else if (funcType === 'startswithFuncExp') {
+                        bindVarName = `'${removeStartEndChar(value)}%'`;
+                    } else {
+                        bindVarName = `'%${removeStartEndChar(value)}%'`;
+                    }
+                } else {
+                    if (funcType === 'endswithFuncExp') {
+                        bindVarName = `%${value}`;
+                    } else if (funcType === 'startswithFuncExp') {
+                        bindVarName = `${value}%`;
+                    } else {
+                        bindVarName = `%${value}%`;
+                    }
                 }
-                return `${col} LIKE %${value}%`;
+
+                // generate clause
+                if (prevSubToken === constants.notExp && prevToken === constants.logOperatorExp) {
+                    this.connectorRes.where = this.connectorRes.where?.slice(0, -4); //Remove the already inserted ' NOT'
+                    whereSubStr = `${col} NOT LIKE`;
+                } else {
+                    whereSubStr = `${col} LIKE`;
+                }
+                this.appendToWhere(whereSubStr);
+                this.handleParameter(bindVarName);
                 break;
-            case 'containsFuncExp':
-                break;
-            case 'containsFuncExp':
+            case 'indexofExpFunc':
                 break;
             default:
                 break;
