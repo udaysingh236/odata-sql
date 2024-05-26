@@ -14,7 +14,7 @@
     "lint:fix": "eslint --ext .ts,.js . --fix",
     "clean": "rimraf ./dist ",
     "build": "tsc -p tsconfig.build.json",
-    "parse": "npm run clean && npm run build && node ./dist/index.js"
+    "create": "npm run clean && npm run build && node ./dist/index.js"
   },
   "repository": {
     "type": "git",
