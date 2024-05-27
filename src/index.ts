@@ -31,7 +31,7 @@ export const dbParamVals = {
 };
 
 const filter =
-    "Address/City eq 'Redmond' and Address/City ne 'London' or ((Price mul 8 gt 20 or Price add 5 ge 10)) or City in ('Redmond', 'London') and (Price sub 5) gt 10 and contains(CompanyName,'freds') and contains(Price,30) or endswith(CompanyName,'Futterkiste') and startswith(CompanyName, 40 )";
+    "Address/City eq 'Redmond' and Address/City ne 'London' or ((Price mul 8 gt 20 or Price add 5 ge 10)) or City in ('Redmond', 'London') and (Price sub 5) gt 10 and contains(CompanyName,'freds') and contains(Price,30) or endswith(CompanyName,'Futterkiste') and startswith(CompanyName, 40 ) or indexof(CompanyName,30) sub 1 eq 1 and length(CompanyName) eq 19";
 export const createFilter = (source: string) => {
     const tokens: IParsedFilterRes = parseFilter(source);
     if (tokens.error) {

@@ -18,7 +18,7 @@ const expDependency: Record<string, { before: string[]; after: string[] }> = {
     },
     queryFuncExp: {
         before: ['logOperatorExp', 'openBracExp'],
-        after: ['comOperatorExp', 'logOperatorExp', 'closeBracExp'],
+        after: ['comOperatorExp', 'logOperatorExp', 'closeBracExp', 'ArithOperatorExp'],
     },
     closeBracExp: {
         before: ['conditionMemberExp', 'closeBracExp', 'queryFuncExp'],
@@ -29,7 +29,7 @@ const expDependency: Record<string, { before: string[]; after: string[] }> = {
         after: ['conditionMemberExp', 'openBracExp', 'queryFuncExp'],
     },
     ArithOperatorExp: {
-        before: ['conditionMemberExp'],
+        before: ['conditionMemberExp', 'queryFuncExp'],
         after: ['conditionMemberExp'],
     },
     conditionMemberExp: {
@@ -43,8 +43,11 @@ export class ODataSqlConnector {
     private connectorRes: IConnectorRes;
     private bindCtr: number;
     private nextExecptedExp: string[];
-    constructor(options: IOptions) {
-        this.dbType = options.dbType ? options.dbType : DbTypes.PostgreSql;
+    constructor(options?: IOptions) {
+        this.dbType = DbTypes.PostgreSql;
+        if (typeof options?.dbType !== 'undefined') {
+            this.dbType = options.dbType;
+        }
         this.connectorRes = {
             where: '',
             parameters: new Map(),
@@ -85,7 +88,7 @@ export class ODataSqlConnector {
                 if (this.checkDependency(token.tokenType, prevToken, prevSubToken)) {
                     if (prevToken === constants.comOperatorExp) {
                         // this will be value and insert it in parameter
-                        this.handleParameter(convertDataType(token.value));
+                        this.handleParameter(token.value);
                     } else {
                         this.appendToWhere(token.value);
                     }
@@ -144,74 +147,114 @@ export class ODataSqlConnector {
         this.connectorRes.where += str;
     }
 
-    private handleParameter(value: string | number): void {
+    private handleParameter(value: string): void {
+        const bindVarName = this.appendToparameters(value);
+        this.appendToWhere(bindVarName);
+    }
+
+    private appendToparameters(value: string): string {
+        const bindVarName = this.getBindVarName();
+        this.connectorRes.parameters?.set(bindVarName, convertDataType(value));
+        return this.dbType === DbTypes.MySql ? dbParamVals.mySql : bindVarName;
+    }
+
+    private getBindVarName(): string {
         let bindVarName = `${dbParamVals.postgresql}${this.bindCtr++}`;
-        if (this.dbType === DbTypes.Oracle || this.dbType === DbTypes.PostgreSql) {
-            this.appendToWhere(bindVarName as string);
-        } else if (this.dbType === DbTypes.MySql) {
-            this.appendToWhere(constants.questionMark as string);
+        if (this.dbType === DbTypes.MySql) {
+            bindVarName = `q${this.bindCtr}`;
         } else if (this.dbType === DbTypes.MsSql) {
-            bindVarName = `${dbParamVals.msSql}${this.bindCtr++}`;
-            this.appendToWhere(constants.questionMark as string);
+            bindVarName = `${dbParamVals.msSql}${this.bindCtr}`;
         }
-        this.connectorRes.parameters?.set(bindVarName, value);
+        return bindVarName;
     }
 
     private handleFunction(token: IOdataFilterToken, prevToken: string, prevSubToken: string = '') {
         const funcName = token.value;
         const funcType = token.subType;
         const funcArgs = token.funcArgs!;
-        switch (funcType) {
-            case 'containsFuncExp':
-            case 'endswithFuncExp':
-            case 'startswithFuncExp':
-                let bindVarName = '';
-                let whereSubStr = '';
-                // In case of contains, make it a 'LIKE'
-                let [col, value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
-                col = col.trim();
-                value = value.trim();
-                if (!col || !value || col.length === 0 || value.length === 0 || restArgs.length > 0) {
-                    // guard clause
-                    throw new Error(`contains function needs only two arguements one column name and one search string, received: ${funcArgs}`);
-                }
-                // Generate value
-                if (value[0] === constants.SINGLE_QUOTE && value[value.length - 1] !== constants.SINGLE_QUOTE) {
-                    throw new Error(`${value} is not in valid string format, missing single quote at the end`);
-                } else if (value[0] !== constants.SINGLE_QUOTE && value[value.length - 1] === constants.SINGLE_QUOTE) {
-                    throw new Error(`${value} is not in valid string format, missing single quote at the start`);
-                } else if (value[0] === constants.SINGLE_QUOTE && value[value.length - 1] === constants.SINGLE_QUOTE) {
-                    if (funcType === 'endswithFuncExp') {
-                        bindVarName = `'%${removeStartEndChar(value)}'`;
-                    } else if (funcType === 'startswithFuncExp') {
-                        bindVarName = `'${removeStartEndChar(value)}%'`;
-                    } else {
-                        bindVarName = `'%${removeStartEndChar(value)}%'`;
-                    }
+        if (funcType === 'containsFuncExp' || funcType === 'endswithFuncExp' || funcType === 'startswithFuncExp') {
+            let bindVarName = '';
+            let whereSubStr = '';
+            // In case of contains, make it a 'LIKE'
+            let [col, value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            col = col.trim();
+            value = value.trim();
+            if (!col || !value || col.length === 0 || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`contains function needs only two arguements one column name and one search string, received: ${funcArgs}`);
+            }
+            // Generate value
+            if (value[0] === constants.SINGLE_QUOTE && value[value.length - 1] !== constants.SINGLE_QUOTE) {
+                throw new Error(`${value} is not in valid string format, missing single quote at the end`);
+            } else if (value[0] !== constants.SINGLE_QUOTE && value[value.length - 1] === constants.SINGLE_QUOTE) {
+                throw new Error(`${value} is not in valid string format, missing single quote at the start`);
+            } else if (value[0] === constants.SINGLE_QUOTE && value[value.length - 1] === constants.SINGLE_QUOTE) {
+                if (funcType === 'endswithFuncExp') {
+                    bindVarName = `'%${removeStartEndChar(value)}'`;
+                } else if (funcType === 'startswithFuncExp') {
+                    bindVarName = `'${removeStartEndChar(value)}%'`;
                 } else {
-                    if (funcType === 'endswithFuncExp') {
-                        bindVarName = `%${value}`;
-                    } else if (funcType === 'startswithFuncExp') {
-                        bindVarName = `${value}%`;
-                    } else {
-                        bindVarName = `%${value}%`;
-                    }
+                    bindVarName = `'%${removeStartEndChar(value)}%'`;
                 }
+            } else {
+                if (funcType === 'endswithFuncExp') {
+                    bindVarName = `%${value}`;
+                } else if (funcType === 'startswithFuncExp') {
+                    bindVarName = `${value}%`;
+                } else {
+                    bindVarName = `%${value}%`;
+                }
+            }
 
-                // generate clause
-                if (prevSubToken === constants.notExp && prevToken === constants.logOperatorExp) {
-                    this.connectorRes.where = this.connectorRes.where?.slice(0, -4); //Remove the already inserted ' NOT'
-                    whereSubStr = `${col} NOT LIKE`;
-                } else {
-                    whereSubStr = `${col} LIKE`;
-                }
+            // generate clause
+            if (prevSubToken === constants.notExp && prevToken === constants.logOperatorExp) {
+                this.connectorRes.where = this.connectorRes.where?.slice(0, -4); //Remove the already inserted ' NOT'
+                whereSubStr = `${col} NOT LIKE`;
+            } else {
+                whereSubStr = `${col} LIKE`;
+            }
+            this.appendToWhere(whereSubStr);
+            this.handleParameter(bindVarName);
+        } else if (funcType === 'indexofFuncExp') {
+            // indexof(CompanyName,'lfreds') eq 1
+            let [col, value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            col = col.trim();
+            value = value.trim();
+            if (!col || !value || col.length === 0 || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`indexof function needs only two arguements one column name and one search string, received: ${funcArgs}`);
+            }
+            if (this.dbType === DbTypes.MsSql) {
+                //CHARINDEX(substring, string/col)
+                const bindVarName = this.appendToparameters(value);
+                whereSubStr = `CHARINDEX(${bindVarName}, ${col})`;
                 this.appendToWhere(whereSubStr);
-                this.handleParameter(bindVarName);
-                break;
-            case 'indexofExpFunc':
-                break;
-            default:
-                break;
+            } else if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.Oracle) {
+                const bindVarName = this.appendToparameters(value);
+                whereSubStr = `INSTR(${col}, ${bindVarName})`;
+                this.appendToWhere(whereSubStr);
+            } else if (this.dbType === DbTypes.PostgreSql) {
+                const bindVarName = this.appendToparameters(value);
+                whereSubStr = `strpos(${col}, ${bindVarName})`;
+                this.appendToWhere(whereSubStr);
+            }
+        } else if (funcType === 'lengthFuncExp') {
+            //length(CompanyName) eq 19
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            value = value.trim();
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`length function needs only one arguement, received: ${funcArgs}`);
+            }
+            if (this.dbType === DbTypes.PostgreSql || this.dbType === DbTypes.Oracle || this.dbType === DbTypes.MySql) {
+                whereSubStr = `length(${value})`;
+                this.appendToWhere(whereSubStr);
+            } else if (this.dbType === DbTypes.MsSql) {
+                whereSubStr = `LEN(${value})`;
+                this.appendToWhere(whereSubStr);
+            }
         }
     }
 
