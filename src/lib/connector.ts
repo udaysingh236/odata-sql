@@ -1,7 +1,7 @@
 import { IOptions, DbTypes, IConnectorRes, dbParamVals } from '..';
 import { IOdataFilterToken } from '@slackbyte/odata-query-parser';
 import { constants } from '../utils/constants';
-import { convertDataType, removeStartEndChar } from '../utils/helpers';
+import { checkDigitOnly, convertDataType, removeStartEndChar } from '../utils/helpers';
 
 const expDependency: Record<string, { before: string[]; after: string[] }> = {
     startExp: {
@@ -177,12 +177,12 @@ export class ODataSqlConnector {
             let whereSubStr = '';
             // In case of contains, make it a 'LIKE'
             let [col, value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
-            col = col.trim();
-            value = value.trim();
             if (!col || !value || col.length === 0 || value.length === 0 || restArgs.length > 0) {
                 // guard clause
                 throw new Error(`contains function needs only two arguements one column name and one search string, received: ${funcArgs}`);
             }
+            col = col.trim();
+            value = value.trim();
             // Generate value
             if (value[0] === constants.SINGLE_QUOTE && value[value.length - 1] !== constants.SINGLE_QUOTE) {
                 throw new Error(`${value} is not in valid string format, missing single quote at the end`);
@@ -219,35 +219,35 @@ export class ODataSqlConnector {
             // indexof(CompanyName,'lfreds') eq 1
             let [col, value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
             let whereSubStr = '';
-            col = col.trim();
-            value = value.trim();
             if (!col || !value || col.length === 0 || value.length === 0 || restArgs.length > 0) {
                 // guard clause
                 throw new Error(`indexof function needs only two arguements one column name and one search string, received: ${funcArgs}`);
             }
+            col = col.trim();
+            value = value.trim();
             if (this.dbType === DbTypes.MsSql) {
                 //CHARINDEX(substring, string/col)
                 const bindVarName = this.appendToparameters(value);
-                whereSubStr = `CHARINDEX(${bindVarName}, ${col})`;
+                whereSubStr = `CHARINDEX(${bindVarName}, ${col}) - 1`;
                 this.appendToWhere(whereSubStr);
             } else if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.Oracle) {
                 const bindVarName = this.appendToparameters(value);
-                whereSubStr = `INSTR(${col}, ${bindVarName})`;
+                whereSubStr = `INSTR(${col}, ${bindVarName}) - 1`;
                 this.appendToWhere(whereSubStr);
             } else if (this.dbType === DbTypes.PostgreSql) {
                 const bindVarName = this.appendToparameters(value);
-                whereSubStr = `strpos(${col}, ${bindVarName})`;
+                whereSubStr = `strpos(${col}, ${bindVarName}) - 1`;
                 this.appendToWhere(whereSubStr);
             }
         } else if (funcType === 'lengthFuncExp') {
             //length(CompanyName) eq 19
             let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
-            value = value.trim();
             let whereSubStr = '';
             if (!value || value.length === 0 || restArgs.length > 0) {
                 // guard clause
                 throw new Error(`length function needs only one arguement, received: ${funcArgs}`);
             }
+            value = value.trim();
             if (this.dbType === DbTypes.PostgreSql || this.dbType === DbTypes.Oracle || this.dbType === DbTypes.MySql) {
                 whereSubStr = `length(${value})`;
                 this.appendToWhere(whereSubStr);
@@ -255,6 +255,55 @@ export class ODataSqlConnector {
                 whereSubStr = `LEN(${value})`;
                 this.appendToWhere(whereSubStr);
             }
+        } else if (funcType === 'substringFuncExp') {
+            // substring(CompanyName,1) eq 'lfreds Futterkiste'
+            let [col, value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!col || !value || col.length === 0 || value.length === 0 || restArgs.length > 1 || !checkDigitOnly(value)) {
+                // guard clause
+                throw new Error(`substring function needs either two or three arguements one column name, start position and number of characters to extract, received: ${funcArgs}`);
+            }
+            col = col.trim();
+            value = value.trim();
+            if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.Oracle || this.dbType === DbTypes.PostgreSql) {
+                if ((restArgs.length === 1 && !checkDigitOnly(restArgs[0])) || (convertDataType(restArgs[0]) as number) < 0) {
+                    throw new Error(`Third arg of substring func should be a positive int, received: ${funcArgs}`);
+                }
+                whereSubStr = this.dbType === DbTypes.MySql || this.dbType === DbTypes.PostgreSql ? `SUBSTRING${funcArgs}` : `SUBSTR${funcArgs}`;
+                this.appendToWhere(whereSubStr);
+            } else if (this.dbType === DbTypes.MsSql) {
+                if (restArgs.length !== 1 || !checkDigitOnly(restArgs[0]) || (convertDataType(restArgs[0]) as number) < 0) {
+                    throw new Error(`Third arg is required and should be a positive int, received: ${funcArgs}`);
+                }
+                whereSubStr = `SUBSTRING${funcArgs}`;
+                this.appendToWhere(whereSubStr);
+            }
+        } else if (funcType === 'tolowerFuncExp' || funcType === 'toupperFuncExp' || funcType === 'trim FuncExp') {
+            /* tolower(CompanyName) eq 'alfreds futterkiste'
+            toupper(CompanyName) eq 'ALFREDS FUTTERKISTE'
+            trim(CompanyName) eq 'Alfreds Futterkiste' */
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`Function needs only one arguement, received: ${funcArgs}`);
+            }
+            value = value.trim();
+            switch (funcType) {
+                case 'tolowerFuncExp':
+                    whereSubStr = `lower${funcArgs}`;
+                    break;
+                case 'toupperFuncExp':
+                    whereSubStr = `upper${funcArgs}`;
+                    break;
+                case 'trim FuncExp':
+                    whereSubStr = `trim${funcArgs}`;
+                    break;
+                default:
+                    break;
+            }
+
+            this.appendToWhere(whereSubStr);
         }
     }
 
