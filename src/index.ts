@@ -45,13 +45,3 @@ export const odataSql = (options?: IOptions) => {
         },
     };
 };
-
-// const odataSqlMsSql = odataSql({ dbType: DbTypes.MsSql });
-// console.log('Operation');
-// console.log(odataSqlMsSql.createFilter(operatorFilterStr));
-// console.log('String');
-// console.log(odataSqlMsSql.createFilter(stringFuncs));
-// console.log('date');
-// console.log(odataSqlMsSql.createFilter(dtTimeFunc));
-// console.log('Arith');
-// console.log(odataSqlMsSql.createFilter(arithFuncs));
