@@ -9,5 +9,7 @@ export const constants: Record<string, string> = {
     closeBracExp: 'closeBracExp',
     queryFuncExp: 'queryFuncExp',
     notExp: 'notExp',
+    andExp: 'andExp',
+    orExp: 'orExp',
     SINGLE_QUOTE: `'`,
 };

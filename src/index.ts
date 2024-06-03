@@ -1,5 +1,6 @@
 import { IParsedFilterRes, parseFilter } from '@slackbyte/odata-query-parser';
-import { ODataSqlConnector } from './lib/connector';
+import { odataSqlConnector } from './lib/connector';
+import { arithFuncs, dtTimeFunc, operatorFilterStr, stringFuncs } from './tests/allTestInOutput';
 
 export enum DbTypes {
     MsSql,
@@ -30,19 +31,27 @@ export const dbParamVals = {
     postgresql: ':v',
 };
 
-const filter =
-    "Address/City eq 'Redmond' and Address/City ne 'London' or ((Price mul 8 gt 20 or Price add 5 ge 10)) or City in ('Redmond', 'London') and (Price sub 5) gt 10 and contains(CompanyName,'freds') and contains(Price,30) or endswith(CompanyName,'Futterkiste') and startswith(CompanyName, 40 ) or indexof(CompanyName,30) eq 1 and length(CompanyName) eq 19 or substring(CompanyName,1,2) eq 'lf' and tolower(CompanyName) eq 'alfreds futterkiste' or toupper(CompanyName) eq 'ALFREDS FUTTERKISTE' and trim(CompanyName) eq 'Alfreds Futterkiste'";
-export const createFilter = (source: string) => {
-    const tokens: IParsedFilterRes = parseFilter(source);
-    if (tokens.error) {
-        console.log(tokens.error.message);
-        console.log(tokens.token);
-        return;
-    }
-
-    const odataSqlPg = new ODataSqlConnector({ dbType: DbTypes.Oracle });
-    console.log(tokens.token);
-    console.log(odataSqlPg.filterConnector(tokens.token));
+export const odataSql = (options?: IOptions) => {
+    const connector = odataSqlConnector(options);
+    const odataSqlRes: IConnectorRes = {};
+    return {
+        createFilter: (source: string): IConnectorRes => {
+            const tokens: IParsedFilterRes = parseFilter(source);
+            if (tokens.error) {
+                odataSqlRes.error = tokens.error;
+                return odataSqlRes;
+            }
+            return connector.filterConnector(tokens.token);
+        },
+    };
 };
 
-createFilter(filter);
+// const odataSqlMsSql = odataSql({ dbType: DbTypes.MsSql });
+// console.log('Operation');
+// console.log(odataSqlMsSql.createFilter(operatorFilterStr));
+// console.log('String');
+// console.log(odataSqlMsSql.createFilter(stringFuncs));
+// console.log('date');
+// console.log(odataSqlMsSql.createFilter(dtTimeFunc));
+// console.log('Arith');
+// console.log(odataSqlMsSql.createFilter(arithFuncs));

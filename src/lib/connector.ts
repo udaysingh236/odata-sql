@@ -6,18 +6,18 @@ import { checkDigitOnly, convertDataType, removeStartEndChar } from '../utils/he
 const expDependency: Record<string, { before: string[]; after: string[] }> = {
     startExp: {
         before: [],
-        after: ['conditionMemberExp', 'queryFuncExp', 'openBracExp'],
+        after: ['conditionMemberExp', 'queryFuncExp', 'openBracExp', 'notExp'],
     },
     comOperatorExp: {
         before: ['conditionMemberExp', 'queryFuncExp', 'closeBracExp'],
-        after: ['conditionMemberExp'],
+        after: ['conditionMemberExp', 'queryFuncExp'],
     },
     logOperatorExp: {
         before: ['conditionMemberExp', 'closeBracExp', 'queryFuncExp'],
-        after: ['conditionMemberExp', 'queryFuncExp', 'openBracExp'],
+        after: ['conditionMemberExp', 'queryFuncExp', 'openBracExp', 'notExp'],
     },
     queryFuncExp: {
-        before: ['logOperatorExp', 'openBracExp'],
+        before: ['logOperatorExp', 'openBracExp', 'notExp', 'comOperatorExp'],
         after: ['comOperatorExp', 'logOperatorExp', 'closeBracExp', 'ArithOperatorExp'],
     },
     closeBracExp: {
@@ -26,6 +26,10 @@ const expDependency: Record<string, { before: string[]; after: string[] }> = {
     },
     openBracExp: {
         before: ['logOperatorExp', 'openBracExp'],
+        after: ['conditionMemberExp', 'openBracExp', 'queryFuncExp', 'notExp'],
+    },
+    notExp: {
+        before: ['logOperatorExp'],
         after: ['conditionMemberExp', 'openBracExp', 'queryFuncExp'],
     },
     ArithOperatorExp: {
@@ -33,12 +37,12 @@ const expDependency: Record<string, { before: string[]; after: string[] }> = {
         after: ['conditionMemberExp'],
     },
     conditionMemberExp: {
-        before: ['comOperatorExp', 'logOperatorExp', 'ArithOperatorExp', 'openBracExp'],
+        before: ['comOperatorExp', 'logOperatorExp', 'ArithOperatorExp', 'openBracExp', 'notExp'],
         after: ['logOperatorExp', 'comOperatorExp', 'ArithOperatorExp', 'closeBracExp'],
     },
 };
 
-export class ODataSqlConnector {
+class ODataSqlConnector {
     private dbType: DbTypes;
     private connectorRes: IConnectorRes;
     private bindCtr: number;
@@ -66,13 +70,31 @@ export class ODataSqlConnector {
             throw new Error('Token length is empty');
         }
 
-        if (!expDependency.startExp.after.includes(tokens[0].tokenType)) {
+        if (!expDependency.startExp.after.includes(tokens[0].tokenType) && !expDependency.startExp.after.includes(tokens[0].subType)) {
             throw new Error(`Filter string cannot start with ${tokens[0].tokenType}, it can starts with either of ${expDependency.startExp.after.join(',')}`);
         }
-        if (tokens[0].tokenType === constants.conditionMemberExp || tokens[0].tokenType === constants.openBracExp) {
+        if (tokens[0].tokenType === constants.conditionMemberExp) {
             this.appendToWhere(tokens[0].value, false);
             this.nextExecptedExp = expDependency[tokens[0].tokenType].after;
             prevToken = tokens[0].tokenType;
+            prevSubToken = tokens[0].subType;
+        } else if (tokens[0].subType === constants.notExp) {
+            //special case
+            this.appendToWhere(tokens[0].value, false);
+            this.nextExecptedExp = ['queryFuncExp'];
+            prevToken = tokens[0].tokenType;
+            prevSubToken = tokens[0].subType;
+        } else if (tokens[0].subType === constants.openBracExp) {
+            this.appendToWhere(tokens[0].value, false);
+            this.nextExecptedExp = expDependency[tokens[0].subType].after;
+            prevToken = tokens[0].tokenType;
+            prevSubToken = tokens[0].subType;
+            totalOpenBrac++;
+        } else if (tokens[0].tokenType === constants.queryFuncExp) {
+            this.handleFunction(tokens[0], prevToken, prevSubToken);
+            this.nextExecptedExp = expDependency[tokens[0].tokenType].after;
+            prevToken = tokens[0].tokenType;
+            prevSubToken = tokens[0].subType;
         }
 
         for (let index = 1; index < tokens.length; index++) {
@@ -97,9 +119,17 @@ export class ODataSqlConnector {
                     throw new Error(`Was expecting ${this.nextExecptedExp} and got ${token.tokenType} | prevToken: ${prevToken}, prevSubToken: ${prevSubToken}, value: ${token.value}`);
                 }
             } else if (token.tokenType === constants.logOperatorExp) {
-                if (this.checkDependency(token.tokenType, prevToken, prevSubToken)) {
+                if (this.checkDependency(token.tokenType, prevToken, prevSubToken) && token.subType !== constants.notExp) {
                     this.appendToWhere(token.value);
                     this.nextExecptedExp = expDependency[token.tokenType].after;
+                } else if (token.subType === constants.notExp && (prevSubToken === constants.orExp || prevSubToken === constants.andExp)) {
+                    this.appendToWhere(token.value);
+                    this.nextExecptedExp = expDependency[token.subType].after;
+                } else if (token.subType === constants.notExp && prevSubToken === constants.openBracExp) {
+                    //special case
+                    // after open brac if 'not' found then this should be followed by a query exp.
+                    this.appendToWhere(token.value);
+                    this.nextExecptedExp = ['queryFuncExp'];
                 } else {
                     throw new Error(`Was expecting ${this.nextExecptedExp} and got ${token.tokenType} | prevToken: ${prevToken}, prevSubToken: ${prevSubToken}, value: ${token.value}`);
                 }
@@ -138,6 +168,7 @@ export class ODataSqlConnector {
                 `Total ${totalOpenBrac} open and ${totalCloseBrac} close brackets in grouping found, ${totalCloseBrac - totalOpenBrac > 0 ? `${totalCloseBrac - totalOpenBrac} opening bracket(s) missing` : `${totalOpenBrac - totalCloseBrac} closing bracket(s) missing`} `,
             );
         }
+        this.connectorRes.where = this.connectorRes.where?.trim();
     }
 
     private appendToWhere(str: string, withSpace: boolean = true): void {
@@ -278,7 +309,7 @@ export class ODataSqlConnector {
                 whereSubStr = `SUBSTRING${funcArgs}`;
                 this.appendToWhere(whereSubStr);
             }
-        } else if (funcType === 'tolowerFuncExp' || funcType === 'toupperFuncExp' || funcType === 'trim FuncExp') {
+        } else if (funcType === 'tolowerFuncExp' || funcType === 'toupperFuncExp' || funcType === 'trimFuncExp') {
             /* tolower(CompanyName) eq 'alfreds futterkiste'
             toupper(CompanyName) eq 'ALFREDS FUTTERKISTE'
             trim(CompanyName) eq 'Alfreds Futterkiste' */
@@ -296,13 +327,117 @@ export class ODataSqlConnector {
                 case 'toupperFuncExp':
                     whereSubStr = `upper${funcArgs}`;
                     break;
-                case 'trim FuncExp':
+                case 'trimFuncExp':
                     whereSubStr = `trim${funcArgs}`;
                     break;
                 default:
                     break;
             }
 
+            this.appendToWhere(whereSubStr);
+        } else if (
+            funcType === 'dayFuncExp' ||
+            funcType === 'hourFuncExp' ||
+            funcType === 'minuteFuncExp' ||
+            funcType === 'monthFuncExp' ||
+            funcType === 'secondFuncExp' ||
+            funcType === 'yearFuncExp'
+        ) {
+            /* day(BirthDate) eq 8 */
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`Function needs only one arguement, received: ${funcArgs}`);
+            }
+            value = value.trim();
+            if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.Oracle) {
+                whereSubStr = `${funcName}${funcArgs}`;
+            } else if (this.dbType === DbTypes.PostgreSql) {
+                whereSubStr = `EXTRACT(${funcName} from ${value})`;
+            } else if (this.dbType === DbTypes.MsSql) {
+                whereSubStr = `DATEPART(${funcName}, ${value})`;
+            }
+            this.appendToWhere(whereSubStr);
+        } else if (funcType === 'dateFuncExp') {
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`Function needs only one arguement, received: ${funcArgs}`);
+            }
+            value = value.trim();
+            if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.MsSql) {
+                whereSubStr = `cast(${value} as date)`;
+            } else if (this.dbType === DbTypes.Oracle || this.dbType === DbTypes.PostgreSql) {
+                whereSubStr = `TO_DATE(${value}, 'MM/DD/YYYY')`;
+            }
+
+            this.appendToWhere(whereSubStr);
+        } else if (funcType === 'nowFuncExp') {
+            let [value] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (value || value.length > 0) {
+                // guard clause
+                throw new Error(`Function needs no arguement, received: ${funcArgs}`);
+            }
+            if (this.dbType === DbTypes.MsSql) {
+                whereSubStr = 'CURRENT_TIMESTAMP';
+            } else if (this.dbType === DbTypes.Oracle || this.dbType === DbTypes.PostgreSql || this.dbType === DbTypes.MySql) {
+                whereSubStr = `now()`;
+            }
+            this.appendToWhere(whereSubStr);
+        } else if (funcType === 'timeFuncExp') {
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`Function needs only one arguement, received: ${funcArgs}`);
+            }
+            value = value.trim();
+            if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.Oracle) {
+                whereSubStr = `${funcName}${funcArgs}`;
+            } else {
+                throw new Error(`Time function is not implemented currently for Postgres or Ms Sql`);
+            }
+            this.appendToWhere(whereSubStr);
+        } else if (funcType === 'ceilingFuncExp') {
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`Function needs only one arguement, received: ${funcArgs}`);
+            }
+            value = value.trim();
+            if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.MsSql || this.dbType === DbTypes.PostgreSql) {
+                whereSubStr = `${funcName}${funcArgs}`;
+            } else if (this.dbType === DbTypes.Oracle) {
+                whereSubStr = `CEIL(${value})`;
+            }
+            this.appendToWhere(whereSubStr);
+        } else if (funcType === 'floorFuncExp') {
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`Function needs only one arguement, received: ${funcArgs}`);
+            }
+            value = value.trim();
+            whereSubStr = `${funcName}${funcArgs}`;
+            this.appendToWhere(whereSubStr);
+        } else if (funcType === 'roundFuncExp') {
+            let [value, ...restArgs] = removeStartEndChar(funcArgs).split(','); //first remove the ( )
+            let whereSubStr = '';
+            if (!value || value.length === 0 || restArgs.length > 0) {
+                // guard clause
+                throw new Error(`Function needs only one arguement, received: ${funcArgs}`);
+            }
+            value = value.trim();
+            if (this.dbType === DbTypes.MsSql) {
+                whereSubStr = `cast(round(${value},0) as int)`;
+            } else {
+                whereSubStr = `${funcName}${funcArgs}`;
+            }
             this.appendToWhere(whereSubStr);
         }
     }
@@ -314,8 +449,18 @@ export class ODataSqlConnector {
         return expDependency[currToken].before.includes(prevToken) && this.nextExecptedExp.includes(currToken);
     }
 
+    private resetEverything() {
+        this.connectorRes = {
+            where: '',
+            parameters: new Map(),
+        };
+        this.bindCtr = 0;
+        this.nextExecptedExp = [];
+    }
+
     public filterConnector(tokens: IOdataFilterToken[]): IConnectorRes {
         try {
+            this.resetEverything();
             this.filter(tokens);
         } catch (err) {
             this.connectorRes.error = err as Error;
@@ -323,3 +468,5 @@ export class ODataSqlConnector {
         return this.connectorRes;
     }
 }
+
+export const odataSqlConnector = (options?: IOptions) => new ODataSqlConnector(options);
