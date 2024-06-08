@@ -7,6 +7,17 @@ A highly versatile, fast and secured OData Version 4.01 SQL Connector which prov
 -   Create high speed, Odata 4.01 compliant data sharing APIs.
 -   Can be used over most of the famous Databases like My SQL, My SQL server, Oracle and Postgres.
 
+## Special Unique features
+
+-   Support for Odata V4.01 new features like 'in' operator.
+-   Better and logical support for 'not' expression
+-   By default, strict usage of bind variables or sql pramaters to avoid sql and odata injection.
+-   Database specific SQL query functions gets generated.
+-   Support for almost all the Filter operator.
+-   Support for almost all the Query Functions.
+-   Support for $orderby, $skip, $top, $count, $select.
+-   Better erroring
+
 ### Example
 
 More examples can be [found here](https://github.com/udaysingh236/odata-sql-connect/blob/main/examples/filter.ts)
@@ -68,7 +79,7 @@ if (filterRawErr) {
 
 ## How to build
 
-To run the parser in local, please clone the repository and follow the below steps:
+To run the connector in local, please clone the repository and follow the below steps:
 
 ```JavaScript
 npm install
@@ -81,17 +92,6 @@ To test and for test coverage:
 npm test
 npm run test:report
 ```
-
-## Special Unique features
-
--   Support for Odata V4.01 new features like 'in' operator.
--   Better and logical support for 'not' expression
--   By default, strict usage of bind variables or sql pramaters to avoid sql and odata injection.
--   Database specific SQL query functions gets generated.
--   Support for almost all the Filter operator.
--   Support for almost all the Query Functions.
--   Support for $orderby, $skip, $top, $count, $select.
--   Better erroring
 
 ## Supported Features
 
