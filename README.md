@@ -12,26 +12,56 @@ A highly versatile, fast and secured OData Version 4.01 SQL Connector which prov
 ```Javascript
 import { odataSql, DbTypes } from '@slackbyte/odata-sql-connect';
 
+// Inpur str for Oracle, Postgres, MySql, MsSql
+import { orderByStr, stringFuncs, topSkipObj } from '../tests/allTestInOutput';
+
 const odataSqlPostgres = odataSql({ dbType: DbTypes.PostgreSql });
-//example request:  GET /api/customers?$filter=City in ('Mumbai', 'London') and (Age sub 5) gt 18 and not endswith(CompanyName,'Futterkiste')
-app.get("/api/customers", async (req: Request, res: Response) => {
-    const filterRes = odataSqlPostgres.createFilter(req.query.$filter);
-    if(filterRes.error) {
-        res.status(422).json({ message: filterRes.error });
-        return;
-    }
-    const query = `SELECT * FROM customers WHERE ${filter.where}`;
-    const queryParams = Object.fromEntries(filterRes.parameters!);
-    const queryRes = await runSelectQuery(query, queryParams); //DB layer function
-    if(queryRes.error) {
-        res.status(422).json({ message: queryRes.error });
-        return;
-    }
-    res.json({
-        '@odata.context': req.protocol + '://' + req.get('host') + '/api/$metadata#customers',
-        value: queryRes.data
-    });
-});
+const { error: filterErr, where, parameters } = odataSqlPostgres.createFilter(stringFuncs);
+if (filterErr) {
+    console.error(filterErr.message);
+} else {
+    console.log(`Oracle/Postgres Example => Where clause: ${where}`);
+    console.log(`Oracle/Postgres Example => Parameters/Bind Variables: ${Object.fromEntries(parameters)}`);
+}
+
+const { error: orderByErr, orderBy } = odataSqlPostgres.createOrderBy(orderByStr);
+if (orderByErr) {
+    console.error(orderByErr.message);
+} else {
+    console.log(`Oracle/Postgres Example => orderBy clause: ${orderBy}`);
+}
+
+const { error: topSkipErr, top, skip } = odataSqlPostgres.createTopSkip(topSkipObj);
+if (topSkipErr) {
+    console.error(topSkipErr.message);
+} else {
+    console.log(`Oracle/Postgres Example => Top: ${top}, Skip: ${skip}`);
+}
+
+// FIlter with named parameter prefix
+
+const odataSqlMsSqlPrefix = odataSql({ dbType: DbTypes.MsSql, namedParamPrefix: 'value' });
+const { error: filterPrefixErr, where: preWhere, parameters: preParameters } = odataSqlMsSqlPrefix.createFilter(stringFuncs);
+if (filterPrefixErr) {
+    console.error(filterPrefixErr.message);
+} else {
+    console.log(`MsSql Example => Where clause: ${preWhere}`);
+    console.log(`MsSql Example => Parameters/Bind Variables: ${Object.fromEntries(preParameters)}`);
+}
+
+// With Raw parameters
+
+const odataSqlPostgresRaw = odataSql({ dbType: DbTypes.PostgreSql, namedParamPrefix: 'var', useRawParameters: true });
+const { error: filterRawErr, where: rawWhere, parameters: rawParameters } = odataSqlPostgresRaw.createFilter(stringFuncs);
+if (filterRawErr) {
+    console.error(filterRawErr.message);
+} else {
+    console.log(`Postgres Example => Where clause: ${rawWhere}`);
+    const valArr = [...rawParameters.values()];
+    console.log(`Postgres Example => Parameters/Bind Variables Values Array: ${valArr}`);
+    console.log(`Postgres Example => Parameters/Bind Variables: ${Object.fromEntries(rawParameters)}`);
+}
+
 ```
 
 ## How to build

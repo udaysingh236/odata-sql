@@ -1,6 +1,5 @@
 import { IOdataSkipToken, IOdataTopToken, IParsedFilterRes, IParsedOrderByRes, IParsedTopRes, parseFilter, parseOrderby, parseSkip, parseTop } from '@slackbyte/odata-query-parser';
 import { odataSqlConnector } from './lib/connector';
-import { orderByStr, topObj, topSkipObj } from './tests/allTestInOutput';
 
 export enum DbTypes {
     MsSql,
@@ -11,7 +10,26 @@ export enum DbTypes {
 }
 
 export interface IOptions {
+    /*
+        Default: Postgres
+        MsSql,
+        MySql,
+        PostgreSql,
+        Oracle,
+        BigQuery,
+     */
     dbType?: DbTypes;
+    /**
+     * Default: false
+     * Set this to true if you need '?' in the where clause as a raw parameter.
+     * Set this to false if you need named parameter in the where clause, for eg: :v1, :v2 etc
+     */
+    useRawParameters?: boolean;
+    /**
+     * Default: 'v'
+     * Set this to set the named parameter prefix, for example: val1, value1 etc
+     */
+    namedParamPrefix?: string;
 }
 
 export interface IConnectorRes {
@@ -21,7 +39,7 @@ export interface IConnectorRes {
     orderBy?: string;
     skip?: string;
     top?: string;
-    parameters?: Map<string, string | number | boolean>;
+    parameters: Map<string, string | number | boolean>;
 }
 
 export interface ICreateTopSkip {
@@ -30,15 +48,17 @@ export interface ICreateTopSkip {
 }
 
 export const dbParamVals = {
-    oracle: ':v',
-    msSql: '@v',
+    oracle: ':',
+    msSql: '@',
     mySql: '?',
-    postgresql: ':v',
+    postgresql: ':',
 };
 
 export const odataSql = (options?: IOptions) => {
     const connector = odataSqlConnector(options);
-    const odataSqlRes: IConnectorRes = {};
+    const odataSqlRes: IConnectorRes = {
+        parameters: new Map(),
+    };
     return {
         createFilter: (source: string): IConnectorRes => {
             const tokens: IParsedFilterRes = parseFilter(source);
@@ -89,5 +109,3 @@ export const odataSql = (options?: IOptions) => {
         },
     };
 };
-
-console.log(odataSql({ dbType: DbTypes.MsSql }).createTopSkip(topObj));

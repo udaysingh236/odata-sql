@@ -1,4 +1,4 @@
-import { DbTypes, odataSql } from '..';
+import { DbTypes, odataSql } from '../src';
 import * as testVars from './allTestInOutput';
 
 describe('Test create filter for MsSql', () => {
@@ -28,6 +28,37 @@ describe('Test create filter for MsSql', () => {
         const result = odataSqlMsSql.createFilter(testVars.arithFuncs);
         const parameter = Object.fromEntries(result.parameters!);
         expect(result.where).toEqual(testVars.arithFuncsResMssql.where);
+        expect(parameter).toEqual(testVars.arithFuncsResMssql.parameters);
+    });
+});
+
+describe('Test create filter for MsSql with Raw parameters', () => {
+    const odataSqlMsSql = odataSql({ dbType: DbTypes.MsSql, useRawParameters: true });
+    test('Comparision, Logical, Arithmetic and Grouping should be equal to the expected result', () => {
+        const result = odataSqlMsSql.createFilter(testVars.operatorFilterStr);
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.optrFilterResMsSqlRaw.where);
+        expect(parameter).toEqual(testVars.optrFilterResMsSql.parameters);
+    });
+
+    test('String functions output should be equal to the expected result', () => {
+        const result = odataSqlMsSql.createFilter(testVars.stringFuncs);
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.stringFuncsResMsSqlRaw.where);
+        expect(parameter).toEqual(testVars.stringFuncsResMsSql.parameters);
+    });
+
+    test('Date and time function output should be equal to the expected result', () => {
+        const result = odataSqlMsSql.createFilter(testVars.dtTimeFunc);
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.dtTimeFuncResMsSqlRaw.where);
+        expect(parameter).toEqual(testVars.dtTimeFuncResMsSql.parameters);
+    });
+
+    test('Arithmatic function output should be equal to the expected result', () => {
+        const result = odataSqlMsSql.createFilter(testVars.arithFuncs);
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.arithFuncsResMssqlRaw.where);
         expect(parameter).toEqual(testVars.arithFuncsResMssql.parameters);
     });
 });
@@ -127,6 +158,39 @@ describe('Test create filter for Postgres', () => {
     });
 });
 
+describe('Test create filter for Postgres using val keyword as prefix for named param', () => {
+    const odataSqlPostgres = odataSql({ dbType: DbTypes.PostgreSql, namedParamPrefix: 'val' });
+    test('Comparision, Logical, Arithmetic and Grouping should be equal to the expected result', () => {
+        const result = odataSqlPostgres.createFilter(testVars.operatorFilterStr);
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.optrFilterResPostgresPrefix.where);
+        expect(parameter).toEqual(testVars.optrFilterResPostgresPrefix.parameters);
+    });
+
+    test('String functions output should be equal to the expected result', () => {
+        const result = odataSqlPostgres.createFilter(testVars.stringFuncs);
+        if (result.error) {
+        }
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.stringFuncsResPostgresPrefix.where);
+        expect(parameter).toEqual(testVars.stringFuncsResPostgresPrefix.parameters);
+    });
+
+    test('Date and time function output should be equal to the expected result', () => {
+        const result = odataSqlPostgres.createFilter(testVars.dtTimeFunc);
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.dtTimeFuncResPostgresPrefix.where);
+        expect(parameter).toEqual(testVars.dtTimeFuncResPostgresPrefix.parameters);
+    });
+
+    test('Arithmatic function output should be equal to the expected result', () => {
+        const result = odataSqlPostgres.createFilter(testVars.arithFuncs);
+        const parameter = Object.fromEntries(result.parameters!);
+        expect(result.where).toEqual(testVars.arithFuncsResPostgresPrefix.where);
+        expect(parameter).toEqual(testVars.arithFuncsResPostgresPrefix.parameters);
+    });
+});
+
 describe('Test create orderby', () => {
     const odataSqlPostgres = odataSql({ dbType: DbTypes.PostgreSql });
     test('orderby should be equal to the expected result', () => {
@@ -148,7 +212,7 @@ describe('Test create Top and Skip for Oracle and MsSql', () => {
     });
     test('When only skip used', () => {
         const result = odataSqlPostgres.createTopSkip(testVars.skipObj);
-        expect(result.top).toEqual('OFFSET 100 ROWS');
+        expect(result.skip).toEqual('OFFSET 80 ROWS');
     });
 });
 
@@ -156,15 +220,15 @@ describe('Test create Top and Skip for Postgres and MySql', () => {
     const odataSqlPostgres = odataSql({ dbType: DbTypes.PostgreSql });
     test('When both top and skip used', () => {
         const result = odataSqlPostgres.createTopSkip(testVars.topSkipObj);
-        expect(result.skip).toEqual('OFFSET 100 ROWS');
-        expect(result.top).toEqual('FETCH NEXT 20 ROWS ONLY');
+        expect(result.skip).toEqual('OFFSET 100');
+        expect(result.top).toEqual('LIMIT 20');
     });
     test('When only top used', () => {
         const result = odataSqlPostgres.createTopSkip(testVars.topObj);
-        expect(result.top).toEqual('FETCH FIRST 20 ROWS ONLY');
+        expect(result.top).toEqual('LIMIT 20');
     });
     test('When only skip used', () => {
         const result = odataSqlPostgres.createTopSkip(testVars.skipObj);
-        expect(result.top).toEqual('OFFSET 100 ROWS');
+        expect(result.skip).toEqual('OFFSET 80');
     });
 });

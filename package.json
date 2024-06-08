@@ -13,8 +13,8 @@
         "lint": "eslint  --ext .ts,.js .",
         "lint:fix": "eslint --ext .ts,.js . --fix",
         "clean": "rimraf ./dist ",
-        "build": "tsc -p tsconfig.build.json",
-        "dev": "npm run clean && npm run build && node ./dist/index.js"
+        "build": "npm run clean && tsc -p tsconfig.build.json",
+        "dev": "npm run build && node ./dist/index.js"
     },
     "repository": {
         "type": "git",

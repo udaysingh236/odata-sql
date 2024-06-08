@@ -47,11 +47,15 @@ class ODataSqlConnector {
     private connectorRes: IConnectorRes;
     private bindCtr: number;
     private nextExecptedExp: string[];
+    private useRawParameters: boolean;
+    private namedParamPrefix: string;
     constructor(options?: IOptions) {
-        this.dbType = DbTypes.PostgreSql;
-        if (typeof options?.dbType !== 'undefined') {
-            this.dbType = options.dbType;
-        }
+        this.dbType = typeof options?.dbType !== 'undefined' ? options.dbType : DbTypes.PostgreSql;
+        // if useRawParameters is not defined => is Mysql ? true: false
+        // if useRawParameters is defined, use its value
+        this.useRawParameters = typeof options?.useRawParameters !== 'undefined' ? options.useRawParameters : this.dbType === DbTypes.MySql ? true : false;
+        this.namedParamPrefix = typeof options?.namedParamPrefix !== 'undefined' ? options.namedParamPrefix : 'v';
+
         this.connectorRes = {
             where: '',
             parameters: new Map(),
@@ -239,18 +243,28 @@ class ODataSqlConnector {
     }
 
     private appendToparameters(value: string): string {
+        //This should return either ? or named parameter like :v1 or @val2
         const bindVarName = this.getBindVarName();
+        let paramName = '?';
         this.connectorRes.parameters?.set(bindVarName, convertDataType(value));
-        return this.dbType === DbTypes.MySql ? dbParamVals.mySql : bindVarName;
+        if (this.useRawParameters) {
+            return paramName;
+        }
+        if (this.dbType === DbTypes.PostgreSql) {
+            paramName = `${dbParamVals.postgresql}${bindVarName}`;
+        } else if (this.dbType === DbTypes.MySql) {
+            paramName = `${dbParamVals.mySql}${bindVarName}`;
+        } else if (this.dbType === DbTypes.MsSql) {
+            paramName = `${dbParamVals.msSql}${bindVarName}`;
+        } else if (this.dbType === DbTypes.Oracle) {
+            paramName = `${dbParamVals.oracle}${bindVarName}`;
+        }
+        return paramName;
     }
 
     private getBindVarName(): string {
-        let bindVarName = `${dbParamVals.postgresql}${this.bindCtr++}`;
-        if (this.dbType === DbTypes.MySql) {
-            bindVarName = `q${this.bindCtr}`;
-        } else if (this.dbType === DbTypes.MsSql) {
-            bindVarName = `${dbParamVals.msSql}${this.bindCtr}`;
-        }
+        const bindVarName = `${this.namedParamPrefix}${this.bindCtr}`;
+        this.bindCtr++;
         return bindVarName;
     }
 
