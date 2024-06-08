@@ -126,3 +126,45 @@ describe('Test create filter for Postgres', () => {
         expect(parameter).toEqual(testVars.arithFuncsResPostgres.parameters);
     });
 });
+
+describe('Test create orderby', () => {
+    const odataSqlPostgres = odataSql({ dbType: DbTypes.PostgreSql });
+    test('orderby should be equal to the expected result', () => {
+        const result = odataSqlPostgres.createOrderBy(testVars.orderByStr);
+        expect(result.orderBy).toEqual(testVars.orderByStrRes);
+    });
+});
+
+describe('Test create Top and Skip for Oracle and MsSql', () => {
+    const odataSqlPostgres = odataSql({ dbType: DbTypes.Oracle });
+    test('When both top and skip used', () => {
+        const result = odataSqlPostgres.createTopSkip(testVars.topSkipObj);
+        expect(result.skip).toEqual('OFFSET 100 ROWS');
+        expect(result.top).toEqual('FETCH NEXT 20 ROWS ONLY');
+    });
+    test('When only top used', () => {
+        const result = odataSqlPostgres.createTopSkip(testVars.topObj);
+        expect(result.top).toEqual('FETCH FIRST 20 ROWS ONLY');
+    });
+    test('When only skip used', () => {
+        const result = odataSqlPostgres.createTopSkip(testVars.skipObj);
+        expect(result.top).toEqual('OFFSET 100 ROWS');
+    });
+});
+
+describe('Test create Top and Skip for Postgres and MySql', () => {
+    const odataSqlPostgres = odataSql({ dbType: DbTypes.PostgreSql });
+    test('When both top and skip used', () => {
+        const result = odataSqlPostgres.createTopSkip(testVars.topSkipObj);
+        expect(result.skip).toEqual('OFFSET 100 ROWS');
+        expect(result.top).toEqual('FETCH NEXT 20 ROWS ONLY');
+    });
+    test('When only top used', () => {
+        const result = odataSqlPostgres.createTopSkip(testVars.topObj);
+        expect(result.top).toEqual('FETCH FIRST 20 ROWS ONLY');
+    });
+    test('When only skip used', () => {
+        const result = odataSqlPostgres.createTopSkip(testVars.skipObj);
+        expect(result.top).toEqual('OFFSET 100 ROWS');
+    });
+});

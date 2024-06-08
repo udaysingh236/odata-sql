@@ -185,3 +185,10 @@ export const arithFuncsResPostgres = {
     where: 'ceiling(Freight) = :v0 AND NOT ( floor(Freight) = :v1 OR round(Freight) = :v2 )',
     parameters: { ':v0': 33, ':v1': 32, ':v2': 32 },
 };
+
+export const orderByStr = 'ReleaseDate asc, Rating desc';
+export const orderByStrRes = 'ReleaseDate asc, Rating desc';
+
+export const topSkipObj = { skipSrc: '100', topSrc: '20' };
+export const topObj = { topSrc: '20' };
+export const skipObj = { skipSrc: '80' };

@@ -1,5 +1,5 @@
 import { IOptions, DbTypes, IConnectorRes, dbParamVals } from '..';
-import { IOdataFilterToken } from '@slackbyte/odata-query-parser';
+import { IOdataFilterToken, IOdataOrderByToken, IOdataSkipToken, IOdataTopToken, IParsedSkipRes, IParsedTopRes } from '@slackbyte/odata-query-parser';
 import { constants } from '../utils/constants';
 import { checkDigitOnly, convertDataType, removeStartEndChar } from '../utils/helpers';
 
@@ -171,11 +171,66 @@ class ODataSqlConnector {
         this.connectorRes.where = this.connectorRes.where?.trim();
     }
 
+    private orderBy(tokens: IOdataOrderByToken[]) {
+        const ORDERBY_VALUES = ['asc', 'desc'];
+        const token = tokens[0];
+        if (!ORDERBY_VALUES.includes(token.colOrder)) {
+            throw new Error(`order can be one of ${ORDERBY_VALUES.join(',')}, received: ${token.colOrder}`);
+        }
+        this.appendToOrderBy(token.colValue, token.colOrder, false);
+        for (let index = 1; index < tokens.length; index++) {
+            const token = tokens[index];
+            if (!ORDERBY_VALUES.includes(token.colOrder)) {
+                throw new Error(`order can be one of ${ORDERBY_VALUES.join(',')}, received: ${token.colOrder}`);
+            }
+            this.appendToOrderBy(token.colValue, token.colOrder);
+        }
+    }
+
+    private topSkip(topToken?: IOdataTopToken, skipToken?: IOdataSkipToken) {
+        if (this.dbType === DbTypes.MsSql || this.dbType === DbTypes.Oracle) {
+            if (skipToken && skipToken?.tokenType === constants.skipExp) {
+                if (skipToken.value <= 0) {
+                    throw new Error('Skip should be greater than zero');
+                }
+                this.appendToSkip(`OFFSET ${skipToken.value} ROWS`);
+            }
+            if (topToken && topToken.tokenType === constants.topExp) {
+                if (topToken.value <= 0) {
+                    throw new Error('Top should be greater than zero');
+                }
+                this.appendToTop(`FETCH ${skipToken && skipToken?.tokenType === constants.skipExp ? 'NEXT' : 'FIRST'} ${topToken.value} ROWS ONLY`);
+            }
+        } else if (this.dbType === DbTypes.MySql || this.dbType === DbTypes.PostgreSql) {
+            if (skipToken && skipToken?.tokenType === constants.skipExp) {
+                this.appendToSkip(`OFFSET ${skipToken.value}`);
+            }
+            if (topToken && topToken.tokenType === constants.topExp) {
+                this.appendToTop(`LIMIT ${topToken.value}`);
+            }
+        }
+    }
+
     private appendToWhere(str: string, withSpace: boolean = true): void {
         if (withSpace) {
             this.connectorRes.where += ' ';
         }
         this.connectorRes.where += str;
+    }
+
+    private appendToOrderBy(colValue: string, colOrder: string, withSeperator: boolean = true): void {
+        if (withSeperator) {
+            this.connectorRes.orderBy += ', ';
+        }
+        this.connectorRes.orderBy += `${colValue} ${colOrder}`;
+    }
+
+    private appendToTop(str: string) {
+        this.connectorRes.top = str;
+    }
+
+    private appendToSkip(str: string) {
+        this.connectorRes.skip = str;
     }
 
     private handleParameter(value: string): void {
@@ -453,6 +508,10 @@ class ODataSqlConnector {
         this.connectorRes = {
             where: '',
             parameters: new Map(),
+            orderBy: '',
+            skip: '',
+            top: '',
+            select: [],
         };
         this.bindCtr = 0;
         this.nextExecptedExp = [];
@@ -462,6 +521,26 @@ class ODataSqlConnector {
         try {
             this.resetEverything();
             this.filter(tokens);
+        } catch (err) {
+            this.connectorRes.error = err as Error;
+        }
+        return this.connectorRes;
+    }
+
+    public orderByConnector(tokens: IOdataOrderByToken[]): IConnectorRes {
+        try {
+            this.resetEverything();
+            this.orderBy(tokens);
+        } catch (err) {
+            this.connectorRes.error = err as Error;
+        }
+        return this.connectorRes;
+    }
+
+    public skipTopConnector(topToken?: IOdataTopToken, skipToken?: IOdataSkipToken) {
+        try {
+            this.resetEverything();
+            this.topSkip(topToken, skipToken);
         } catch (err) {
             this.connectorRes.error = err as Error;
         }

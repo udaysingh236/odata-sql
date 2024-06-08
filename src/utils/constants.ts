@@ -11,5 +11,7 @@ export const constants: Record<string, string> = {
     notExp: 'notExp',
     andExp: 'andExp',
     orExp: 'orExp',
+    topExp: 'topExp',
+    skipExp: 'skipExp',
     SINGLE_QUOTE: `'`,
 };

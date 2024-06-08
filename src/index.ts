@@ -1,6 +1,6 @@
-import { IParsedFilterRes, parseFilter } from '@slackbyte/odata-query-parser';
+import { IOdataSkipToken, IOdataTopToken, IParsedFilterRes, IParsedOrderByRes, IParsedTopRes, parseFilter, parseOrderby, parseSkip, parseTop } from '@slackbyte/odata-query-parser';
 import { odataSqlConnector } from './lib/connector';
-import { arithFuncs, dtTimeFunc, operatorFilterStr, stringFuncs } from './tests/allTestInOutput';
+import { orderByStr, topObj, topSkipObj } from './tests/allTestInOutput';
 
 export enum DbTypes {
     MsSql,
@@ -19,9 +19,14 @@ export interface IConnectorRes {
     select?: string[];
     where?: string;
     orderBy?: string;
-    skip?: number;
-    top?: number;
+    skip?: string;
+    top?: string;
     parameters?: Map<string, string | number | boolean>;
+}
+
+export interface ICreateTopSkip {
+    topSrc?: string;
+    skipSrc?: string;
 }
 
 export const dbParamVals = {
@@ -43,5 +48,46 @@ export const odataSql = (options?: IOptions) => {
             }
             return connector.filterConnector(tokens.token);
         },
+        createOrderBy: (source: string): IConnectorRes => {
+            const tokens: IParsedOrderByRes = parseOrderby(source);
+            if (tokens.error) {
+                odataSqlRes.error = tokens.error;
+                return odataSqlRes;
+            }
+            return connector.orderByConnector(tokens.token);
+        },
+        createTopSkip: ({ topSrc, skipSrc }: ICreateTopSkip): IConnectorRes => {
+            if (!topSrc && !skipSrc) {
+                odataSqlRes.error = new Error(`Either of or both Top and Skip needed`);
+                return odataSqlRes;
+            }
+            let topToken: IOdataTopToken = {
+                tokenType: '',
+                value: 0,
+            };
+            let skipToken: IOdataSkipToken = {
+                tokenType: '',
+                value: 0,
+            };
+            if (topSrc) {
+                const toptokens: IParsedTopRes = parseTop(topSrc);
+                if (toptokens.error) {
+                    odataSqlRes.error = toptokens.error;
+                    return odataSqlRes;
+                }
+                topToken = toptokens.token;
+            }
+            if (skipSrc) {
+                const skiptokens: IParsedTopRes = parseSkip(skipSrc);
+                if (skiptokens.error) {
+                    odataSqlRes.error = skiptokens.error;
+                    return odataSqlRes;
+                }
+                skipToken = skiptokens.token;
+            }
+            return connector.skipTopConnector(topToken, skipToken);
+        },
     };
 };
+
+console.log(odataSql({ dbType: DbTypes.MsSql }).createTopSkip(topObj));
