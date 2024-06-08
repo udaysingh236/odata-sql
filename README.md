@@ -7,7 +7,9 @@ A highly versatile, fast and secured OData Version 4.01 SQL Connector which prov
 -   Create high speed, Odata 4.01 compliant data sharing APIs.
 -   Can be used over most of the famous Databases like My SQL, My SQL server, Oracle and Postgres.
 
-### Example usecase
+### Example
+
+More examples can be (found here)[https://github.com/udaysingh236/odata-sql-connect/blob/main/examples/filter.ts]
 
 ```Javascript
 import { odataSql, DbTypes } from '@slackbyte/odata-sql-connect';
