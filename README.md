@@ -9,7 +9,7 @@ A highly versatile, fast and secured OData Version 4.01 SQL Connector which prov
 
 ### Example
 
-More examples can be (found here)[https://github.com/udaysingh236/odata-sql-connect/blob/main/examples/filter.ts]
+More examples can be [found here](https://github.com/udaysingh236/odata-sql-connect/blob/main/examples/filter.ts)
 
 ```Javascript
 import { odataSql, DbTypes } from '@slackbyte/odata-sql-connect';
